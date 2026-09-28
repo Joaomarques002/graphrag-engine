@@ -1,0 +1,16 @@
+# Integração com LangChain e LLMs
+langchain>=0.2.0
+langchain-community>=0.2.0
+langchain-ollama>=0.1.0
+
+# Base de dados de Grafos
+neo4j>=5.18.0
+
+# Validação de Dados e Tipagem
+pydantic>=2.0.0
+
+# Gestão de Variáveis de Ambiente
+python-dotenv>=1.0.0
+
+# Processamento de Documentos
+pypdf>=4.0.0
