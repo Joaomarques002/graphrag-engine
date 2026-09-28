@@ -17,3 +17,6 @@ pypdf>=4.0.0
 
 # Interface de Utilizador
 streamlit>=1.30.0
+
+# Visualização de Grafos
+pyvis>=0.3.2

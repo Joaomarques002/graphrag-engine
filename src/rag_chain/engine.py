@@ -75,21 +75,15 @@ class GraphRAGEngine:
         ]
         return words
 
-    def _get_subgraph_context(self, keywords: List[str], max_results: int = 30) -> str:
+    def _get_subgraph_context(self, keywords: List[str], max_results: int = 30) -> Dict[str, any]:
         """Procura entidades correspondentes no Neo4j e navega pelas suas relações
-        até 2 saltos de distância.
-        
-        Args:
-            keywords (List[str]): Lista de termos a procurar.
-            max_results (int): Limite máximo de triplos a retornar para evitar estourar a janela de contexto.
-            
-        Returns:
-            str: Representação textual formatada do subgrafo recuperado.
-        """
+        até 2 saltos de distância."""
         if not keywords:
-            return "Nenhuma palavra-chave válida foi identificada na pergunta."
+            return {
+                "text": "Nenhuma palavra-chave válida foi identificada na pergunta.",
+                "triples": []
+            }
 
-        # Query Cypher para expansão de Subgrafo até 2 Saltos
         cypher_subgraph = """
         UNWIND $keywords AS kw
         MATCH (e:Entity)
@@ -111,46 +105,55 @@ class GraphRAGEngine:
 
             if not results:
                 logger.warning(f"Nenhum subgrafo encontrado no Neo4j para os termos: {keywords}")
-                return "Nenhum subgrafo ou relação correspondente foi encontrado na base de dados."
+                return {
+                    "text": "Nenhum subgrafo ou relação correspondente foi encontrado na base de dados.",
+                    "triples": []
+                }
 
-            # Formatar triplos em linguagem legível para o LLM
             formatted_triples = []
+            triples_list = []
+
             for record in results:
                 src = record.get("source")
                 rel = record.get("relationship")
                 tgt = record.get("target")
+                
                 formatted_triples.append(f"• ({src}) -[{rel}]-> ({tgt})")
+                triples_list.append({
+                    "source": src,
+                    "relationship": rel,
+                    "target": tgt
+                })
 
             context_str = "\n".join(formatted_triples)
             logger.info(f"🔎 Recuperados {len(formatted_triples)} triplos de relações do Neo4j.")
-            return context_str
+            
+            return {
+                "text": context_str,
+                "triples": triples_list
+            }
 
         except Exception as e:
             logger.error(f"❌ Erro ao consultar subgrafo no Neo4j: {str(e)}")
-            return "Erro técnico ao aceder ao Grafo de Conhecimento."
+            return {
+                "text": "Erro técnico ao aceder ao Grafo de Conhecimento.",
+                "triples": []
+            }
 
-    def query(self, question: str) -> Dict[str, str]:
-        """Executa a interrogação completa ao sistema GraphRAG.
-        
-        Args:
-            question (str): A pergunta em linguagem natural do utilizador.
-            
-        Returns:
-            Dict[str, str]: Dicionário contendo a resposta gerada e o contexto recuperado.
-        """
+    def query(self, question: str) -> Dict[str, any]:
+        """Executa a interrogação completa ao sistema GraphRAG."""
         logger.info(f"❓ Nova pergunta recebida: '{question}'")
 
-        # 1. Extrair termos e obter o subgrafo
         keywords = self._extract_keywords(question)
-        graph_context = self._get_subgraph_context(keywords)
+        graph_data = self._get_subgraph_context(keywords)
 
-        # 2. Gerar resposta fundamentada
         response = self.chain.invoke({
-            "graph_context": graph_context,
+            "graph_context": graph_data["text"],
             "question": question,
         })
 
         return {
             "answer": str(response.content),
-            "context_used": graph_context,
+            "context_used": graph_data["text"],
+            "triples": graph_data["triples"],
         }
